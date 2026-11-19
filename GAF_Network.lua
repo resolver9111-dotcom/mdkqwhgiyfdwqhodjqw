@@ -2,7 +2,7 @@
 --==================================================
 -- GAF NETWORK
 -- Global Network System
--- Version 1.1
+-- Version 1.2
 --==================================================
 
 local Network = {}
@@ -16,7 +16,7 @@ local HttpService = game:GetService("HttpService")
 Network.Config = {
     URL = "https://ditimcqkqbljthqzaihl.supabase.co",
     KEY = "sb_publishable_lK9zsP4B0O0IblSXcqjw0Q_48x9vx6O",
-    VERSION = "1.1"
+    VERSION = "1.2"
 }
 
 --==================================================
@@ -32,6 +32,7 @@ Network.Connected = false
 --==================================================
 
 local function http(options)
+
     local fn = (syn and syn.request)
         or http_request
         or request
@@ -46,6 +47,7 @@ end
 --==================================================
 
 local function getHeaders()
+
     assert(Network.Token, "Not authenticated")
 
     return {
@@ -59,17 +61,18 @@ end
 -- RESPONSE CHECK
 --==================================================
 
-local function checkResponse(response, expected)
+local function checkResponse(response, expected, action)
+
     if not response then
-        error("No HTTP response received")
+        error("[GAF Network] No HTTP response: " .. action)
     end
 
     if response.StatusCode ~= expected then
         error(
-            "HTTP "
+            "[GAF Network] "
+            .. action
+            .. " failed. HTTP "
             .. tostring(response.StatusCode)
-            .. ": "
-            .. tostring(response.Body)
         )
     end
 
@@ -79,28 +82,20 @@ end
 --==================================================
 -- AUTHENTICATION
 --==================================================
-print("[GAF] CONNECT FIX V3 LOADED")
-
 
 function Network:Connect()
-    local events = Network:GetEvents(30)
-
-print("[GAF] RECEIVED EVENTS:", #events)
-
-for i, event in ipairs(events) do
-    print(
-        "[GAF EVENT]",
-        event.event_type,
-        event.user_id,
-        event.payload.message or ""
-    )
-end
 
     if self.Connected then
         return true
     end
 
-    local body = '{"data":{"client":"GAF","version":"1.2"}}'
+    print("[GAF Network] Connecting...")
+
+    -- Важно: data должен быть JSON-объектом,
+    -- поэтому тело задаём строкой вручную.
+
+    local body =
+        '{"data":{"client":"GAF","version":"1.2"}}'
 
     local response = http({
         Url = self.Config.URL .. "/auth/v1/signup",
@@ -115,11 +110,16 @@ end
     })
 
     if not response then
-        error("[GAF] No response from Supabase")
+        error("[GAF Network] No response from Supabase")
     end
 
-    if response.StatusCode < 200 or response.StatusCode >= 300 then
-        error("[GAF] Auth HTTP error: " .. tostring(response.StatusCode))
+    if response.StatusCode < 200
+        or response.StatusCode >= 300 then
+
+        error(
+            "[GAF Network] Auth failed. HTTP "
+            .. tostring(response.StatusCode)
+        )
     end
 
     local data = HttpService:JSONDecode(response.Body)
@@ -137,7 +137,6 @@ end
     return true
 end
 
-
 --==================================================
 -- SEND EVENT
 --==================================================
@@ -147,7 +146,8 @@ function Network:SendEvent(eventType, payload)
     assert(self.Connected, "Not connected")
 
     assert(
-        type(eventType) == "string",
+        type(eventType) == "string"
+        and #eventType > 0,
         "Invalid event type"
     )
 
@@ -156,9 +156,13 @@ function Network:SendEvent(eventType, payload)
         Method = "POST",
 
         Headers = (function()
-            local h = getHeaders()
-            h["Prefer"] = "return=minimal"
-            return h
+
+            local headers = getHeaders()
+
+            headers["Prefer"] = "return=minimal"
+
+            return headers
+
         end)(),
 
         Body = HttpService:JSONEncode({
@@ -168,11 +172,18 @@ function Network:SendEvent(eventType, payload)
         })
     })
 
-    assert(
-        response.StatusCode >= 200
-        and response.StatusCode < 300,
-        "Event error: " .. tostring(response.Body)
-    )
+    if not response then
+        error("[GAF Network] No response while sending event")
+    end
+
+    if response.StatusCode < 200
+        or response.StatusCode >= 300 then
+
+        error(
+            "[GAF Network] SendEvent failed. HTTP "
+            .. tostring(response.StatusCode)
+        )
+    end
 
     return true
 end
@@ -181,14 +192,18 @@ end
 -- GET EVENTS
 --==================================================
 
-
 function Network:GetEvents(limit)
 
     assert(self.Connected, "Not connected")
 
-    limit = math.clamp(tonumber(limit) or 30, 1, 100)
+    limit = math.clamp(
+        tonumber(limit) or 30,
+        1,
+        100
+    )
 
     local response = http({
+
         Url = self.Config.URL
             .. "/rest/v1/gaf_events"
             .. "?select=id,user_id,event_type,payload,created_at"
@@ -196,19 +211,15 @@ function Network:GetEvents(limit)
             .. "&limit=" .. limit,
 
         Method = "GET",
+
         Headers = getHeaders()
     })
 
-    if not response then
-        error("[GAF Network] No response while getting events")
-    end
-
-    if response.StatusCode ~= 200 then
-        error(
-            "[GAF Network] GetEvents HTTP error: "
-            .. tostring(response.StatusCode)
-        )
-    end
+    checkResponse(
+        response,
+        200,
+        "GetEvents"
+    )
 
     local events = HttpService:JSONDecode(response.Body)
 
@@ -219,9 +230,24 @@ function Network:GetEvents(limit)
     return events
 end
 
+--==================================================
+-- DISCONNECT
+--==================================================
+
+function Network:Disconnect()
+
+    self.Connected = false
+    self.Token = nil
+    self.UserId = nil
+
+    print("[GAF Network] Disconnected")
+
+end
 
 --==================================================
 -- RETURN MODULE
 --==================================================
+
+print("[GAF Network] Module loaded. Version:", Network.Config.VERSION)
 
 return Network
