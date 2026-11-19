@@ -1,22 +1,35 @@
 
 --==================================================
 -- GAF NETWORK
--- Global communication module
--- Version 1.0
+-- Global Network System
+-- Version 1.1
 --==================================================
 
 local Network = {}
 
 local HttpService = game:GetService("HttpService")
 
+--==================================================
+-- CONFIGURATION
+--==================================================
+
 Network.Config = {
     URL = "https://ditimcqkqbljthqzaihl.supabase.co",
-    KEY = "sb_publishable_lK9zsP4B0O0IblSXcqjw0Q_48x9vx6O"
+    KEY = "sb_publishable_lK9zsP4B0O0IblSXcqjw0Q_48x9vx6O",
+    VERSION = "1.1"
 }
+
+--==================================================
+-- STATE
+--==================================================
 
 Network.UserId = nil
 Network.Token = nil
 Network.Connected = false
+
+--==================================================
+-- HTTP REQUEST
+--==================================================
 
 local function http(options)
     local fn = (syn and syn.request)
@@ -28,7 +41,13 @@ local function http(options)
     return fn(options)
 end
 
-local function headers()
+--==================================================
+-- HEADERS
+--==================================================
+
+local function getHeaders()
+    assert(Network.Token, "Not authenticated")
+
     return {
         ["apikey"] = Network.Config.KEY,
         ["Authorization"] = "Bearer " .. Network.Token,
@@ -36,21 +55,52 @@ local function headers()
     }
 end
 
--- Connect
+--==================================================
+-- RESPONSE CHECK
+--==================================================
+
+local function checkResponse(response, expected)
+    if not response then
+        error("No HTTP response received")
+    end
+
+    if response.StatusCode ~= expected then
+        error(
+            "HTTP "
+            .. tostring(response.StatusCode)
+            .. ": "
+            .. tostring(response.Body)
+        )
+    end
+
+    return response
+end
+
+--==================================================
+-- AUTHENTICATION
+--==================================================
+
 function Network:Connect()
+
+    if self.Connected then
+        return true
+    end
+
     local response = http({
         Url = self.Config.URL .. "/auth/v1/signup",
         Method = "POST",
+
         Headers = {
             ["apikey"] = self.Config.KEY,
             ["Content-Type"] = "application/json"
         },
-Body = HttpService:JSONEncode({
-    data = {
-        client = "GAF",
-        version = "1.0"
-    }
-})
+
+        Body = HttpService:JSONEncode({
+            data = {
+                client = "GAF",
+                version = self.Config.VERSION
+            }
+        })
     })
 
     assert(
@@ -69,23 +119,34 @@ Body = HttpService:JSONEncode({
     self.Connected = true
 
     print("[GAF Network] Connected")
-    print("[GAF Network] ID: " .. self.UserId)
+    print("[GAF Network] User ID: " .. self.UserId)
 
     return true
 end
 
--- Send event
+--==================================================
+-- SEND EVENT
+--==================================================
+
 function Network:SendEvent(eventType, payload)
+
     assert(self.Connected, "Not connected")
+
+    assert(
+        type(eventType) == "string",
+        "Invalid event type"
+    )
 
     local response = http({
         Url = self.Config.URL .. "/rest/v1/gaf_events",
         Method = "POST",
+
         Headers = (function()
-            local h = headers()
+            local h = getHeaders()
             h["Prefer"] = "return=minimal"
             return h
         end)(),
+
         Body = HttpService:JSONEncode({
             user_id = self.UserId,
             event_type = eventType,
@@ -102,26 +163,48 @@ function Network:SendEvent(eventType, payload)
     return true
 end
 
--- Read recent events
+--==================================================
+-- GET EVENTS
+--==================================================
+
 function Network:GetEvents(limit)
+
     assert(self.Connected, "Not connected")
+
+    limit = math.clamp(tonumber(limit) or 30, 1, 100)
 
     local response = http({
         Url = self.Config.URL
             .. "/rest/v1/gaf_events"
             .. "?select=id,user_id,event_type,payload,created_at"
             .. "&order=created_at.desc"
-            .. "&limit=" .. tostring(limit or 30),
+            .. "&limit=" .. limit,
+
         Method = "GET",
-        Headers = headers()
+        Headers = getHeaders()
     })
 
-    assert(
-        response.StatusCode == 200,
-        "Read error: " .. tostring(response.Body)
-    )
+    checkResponse(response, 200)
 
     return HttpService:JSONDecode(response.Body)
 end
+
+--==================================================
+-- DISCONNECT
+--==================================================
+
+function Network:Disconnect()
+
+    self.Connected = false
+    self.Token = nil
+    self.UserId = nil
+
+    print("[GAF Network] Disconnected")
+
+end
+
+--==================================================
+-- RETURN MODULE
+--==================================================
 
 return Network
