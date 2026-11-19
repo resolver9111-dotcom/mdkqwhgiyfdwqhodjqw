@@ -79,7 +79,7 @@ end
 --==================================================
 -- AUTHENTICATION
 --==================================================
-
+print("[GAF] CONNECT FIX V3 LOADED")
 
 
 function Network:Connect()
