@@ -108,7 +108,7 @@ function Network:Connect()
     end
 
     print("[GAF] Auth status:", response.StatusCode)
-    print("[GAF] Auth response:", response.Body)
+    print("[GAF] Auth response received")
 
     assert(
         response.StatusCode >= 200
@@ -175,6 +175,7 @@ end
 -- GET EVENTS
 --==================================================
 
+
 function Network:GetEvents(limit)
 
     assert(self.Connected, "Not connected")
@@ -192,24 +193,26 @@ function Network:GetEvents(limit)
         Headers = getHeaders()
     })
 
-    checkResponse(response, 200)
+    if not response then
+        error("[GAF Network] No response while getting events")
+    end
 
-    return HttpService:JSONDecode(response.Body)
+    if response.StatusCode ~= 200 then
+        error(
+            "[GAF Network] GetEvents HTTP error: "
+            .. tostring(response.StatusCode)
+        )
+    end
+
+    local events = HttpService:JSONDecode(response.Body)
+
+    if type(events) ~= "table" then
+        error("[GAF Network] Invalid events response")
+    end
+
+    return events
 end
 
---==================================================
--- DISCONNECT
---==================================================
-
-function Network:Disconnect()
-
-    self.Connected = false
-    self.Token = nil
-    self.UserId = nil
-
-    print("[GAF Network] Disconnected")
-
-end
 
 --==================================================
 -- RETURN MODULE
