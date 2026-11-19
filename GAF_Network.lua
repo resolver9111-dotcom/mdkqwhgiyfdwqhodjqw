@@ -45,9 +45,12 @@ function Network:Connect()
             ["apikey"] = self.Config.KEY,
             ["Content-Type"] = "application/json"
         },
-        Body = HttpService:JSONEncode({
-            data = {}
-        })
+Body = HttpService:JSONEncode({
+    data = {
+        client = "GAF",
+        version = "1.0"
+    }
+})
     })
 
     assert(
