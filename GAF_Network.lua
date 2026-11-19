@@ -83,6 +83,18 @@ print("[GAF] CONNECT FIX V3 LOADED")
 
 
 function Network:Connect()
+    local events = Network:GetEvents(30)
+
+print("[GAF] RECEIVED EVENTS:", #events)
+
+for i, event in ipairs(events) do
+    print(
+        "[GAF EVENT]",
+        event.event_type,
+        event.user_id,
+        event.payload.message or ""
+    )
+end
 
     if self.Connected then
         return true
