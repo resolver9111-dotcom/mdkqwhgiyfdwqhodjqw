@@ -80,11 +80,16 @@ end
 -- AUTHENTICATION
 --==================================================
 
+
 function Network:Connect()
 
     if self.Connected then
         return true
     end
+
+    local body = '{"data":{"client":"GAF","version":"1.2"}}'
+
+    print("[GAF] Sending auth body:", body)
 
     local response = http({
         Url = self.Config.URL .. "/auth/v1/signup",
@@ -95,13 +100,15 @@ function Network:Connect()
             ["Content-Type"] = "application/json"
         },
 
-        Body = HttpService:JSONEncode({
-            data = {
-                client = "GAF",
-                version = self.Config.VERSION
-            }
-        })
+        Body = body
     })
+
+    if not response then
+        error("No response from Supabase")
+    end
+
+    print("[GAF] Auth status:", response.StatusCode)
+    print("[GAF] Auth response:", response.Body)
 
     assert(
         response.StatusCode >= 200
@@ -118,11 +125,12 @@ function Network:Connect()
     self.UserId = data.user.id
     self.Connected = true
 
-    print("[GAF Network] Connected")
-    print("[GAF Network] User ID: " .. self.UserId)
+    print("[GAF Network] Connected!")
+    print("[GAF Network] User ID:", self.UserId)
 
     return true
 end
+
 
 --==================================================
 -- SEND EVENT
