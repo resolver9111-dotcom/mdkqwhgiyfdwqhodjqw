@@ -81,6 +81,7 @@ end
 --==================================================
 
 
+
 function Network:Connect()
 
     if self.Connected then
@@ -88,8 +89,6 @@ function Network:Connect()
     end
 
     local body = '{"data":{"client":"GAF","version":"1.2"}}'
-
-    print("[GAF] Sending auth body:", body)
 
     local response = http({
         Url = self.Config.URL .. "/auth/v1/signup",
@@ -104,17 +103,12 @@ function Network:Connect()
     })
 
     if not response then
-        error("No response from Supabase")
+        error("[GAF] No response from Supabase")
     end
 
-    print("[GAF] Auth status:", response.StatusCode)
-    print("[GAF] Auth response received")
-
-    assert(
-        response.StatusCode >= 200
-        and response.StatusCode < 300,
-        "Auth error: " .. tostring(response.Body)
-    )
+    if response.StatusCode < 200 or response.StatusCode >= 300 then
+        error("[GAF] Auth HTTP error: " .. tostring(response.StatusCode))
+    end
 
     local data = HttpService:JSONDecode(response.Body)
 
